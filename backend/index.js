@@ -17,7 +17,9 @@ const genAI = new GoogleGenerativeAI(process.env.API_KEY);
 const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
 const indexName = "vector-namespace";
 
-app.use(cors());
+app.use(cors({
+    origin: "*",
+}));
 app.use(express.json());
 
 async function createIndex(indexName) {
