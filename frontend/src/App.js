@@ -23,7 +23,7 @@ function App() {
     formData.append("username", username);
 
     try {
-      await axios.post("http://localhost:8000/upload", formData, {
+      await axios.post("https://rag-pdf-qna.onrender.com/upload", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -47,7 +47,7 @@ function App() {
     }
   
     try {
-      let response = await fetch("http://localhost:8000/ask", {
+      let response = await fetch("https://rag-pdf-qna.onrender.com/ask", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
