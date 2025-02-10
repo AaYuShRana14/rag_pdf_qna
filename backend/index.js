@@ -39,44 +39,44 @@ async function createIndex(indexName) {
     }
 }
 async function generateStructuredAnswer(question, chunks) {
-    console.log("Generating structured answer...");
-    console.log("Question:", question);
-    console.log("Chunks:", chunks);
-
     const prompt = `
     You are a helpful assistant specializing in summarizing and answering questions based on provided information.
+    Only use the information provided in the text to answer the following question.
     Question: ${question}
-    Based on the following relevant chunks, provide a concise answer:
-    ${chunks.join("\n\n")}
-    Only use the relevant information. Avoid restating everything verbatim.
+    Relevant information: ${chunks.slice(0, 2).join("\n\n")}
+    Answer concisely in 3-5 sentences:
 `;
-    
-    const response = await model.generateContent({ prompt }); 
-    console.log("Response:", response);
-
-    return response.candidates[0]?.output || "No structured answer could be generated.";
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+let answer="";
+try{
+const result = await model.generateContentStream(prompt);
+for await (const chunk of result.stream) {
+    const chunkText = chunk.text();
+    answer+=chunkText;
+  }
 }
-function getChunks(text, chunkSize = 500) {
+catch(error){
+    console.log("Error:", error);
+}
+return answer;
+}
+function getChunks(text, chunkSize = 250) {
     const chunks = [];
-    const sentences = text.split(". ");
     let currentChunk = "";
-
-    for (let sentence of sentences) {
-        if (currentChunk.length + sentence.length <= chunkSize) {
-            currentChunk += sentence + ". ";
+    const words = text.split(/\s+/); 
+    for (let word of words) {
+        if ((currentChunk + word).length <= chunkSize) {
+            currentChunk += (currentChunk ? " " : "") + word;
         } else {
             chunks.push(currentChunk.trim());
-            currentChunk = sentence + ". ";
+            currentChunk = word; 
         }
     }
-
     if (currentChunk) {
         chunks.push(currentChunk.trim());
     }
-
     return chunks;
 }
-
 async function getEmbedding(chunks) {
     return Promise.all(chunks.map(async (chunk) => {
         const result = await model.embedContent(chunk);
@@ -143,15 +143,14 @@ app.post("/ask", async (req, res) => {
 
         const quesEmbedding = await model.embedContent(question);
         const index = pinecone.index(indexName);
-        const threshold = 0.02;
+        const threshold = 0.4;
         const results = await index.query({
             vector: quesEmbedding.embedding.values,
             filter: { username },
             topK: 3,
             includeMetadata: true,
         });
-        const relevantMatches = results.matches.filter(match => match.score >= threshold);
-        console.log("Relevant matches:", relevantMatches);
+        const relevantMatches = results.matches.filter(match => match.score >= threshold).slice(0, 2);
         if (!results.matches || results.matches.length === 0) {
             return res.status(404).json({ error: "No matching chunk found." });
         }
@@ -159,7 +158,7 @@ app.post("/ask", async (req, res) => {
             res.status(404).json({ error: "No relevant matches found above the similarity threshold." });
         } else {
             const structuredAnswer = await generateStructuredAnswer(question, relevantMatches.map(match => match.metadata.text));
-            res.status(200).json({ structuredAnswer });
+            res.status(200).json({ answer:structuredAnswer });
         }
     } catch (error) {
         res.status(500).json({
